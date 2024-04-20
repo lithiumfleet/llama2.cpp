@@ -1,6 +1,7 @@
 # choose your compiler, e.g. gcc/clang
 # example override to clang: make run CC=clang
 CC = gcc
+PP = g++
 
 # the most basic way of building that is most likely to work on most systems
 .PHONY: run
@@ -74,3 +75,7 @@ testcc:
 clean:
 	rm -f run
 	rm -f runq
+
+.PHONY: fromcpp
+fromcpp:
+	$(PP) -g -o run run.cpp src/Config.cpp src/Tokenizer.cpp -lm -Isrc
