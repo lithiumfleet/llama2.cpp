@@ -404,6 +404,14 @@ void build_tokenizer(Tokenizer* t, char* tokenizer_path, int vocab_size) {
         t->vocab[i] = (char *)malloc(len + 1);
         if (fread(t->vocab[i], len, 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
         t->vocab[i][len] = '\0'; // add the string terminating token
+        // nop... this not work...
+        // if(i >= 259) {
+        //     _Float16 a = *t->vocab_scores;
+        //     int b = len;
+        //     char* c = t->vocab[i];
+        //     printf("vocab:%s\tvocab_score:%f\tvocab_len:%d\n",c, a, b);
+        //     fflush(stdout);
+        // }
     }
     fclose(file);
 }
