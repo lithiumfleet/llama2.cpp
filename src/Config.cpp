@@ -8,7 +8,7 @@ void Config::load_from_path(std::string config_file_path) {
     
     if (!fp.is_open()) {
         std::string error_message = "[error] can not open file " + config_file_path + " when loading config.\n";
-        std::printf("%s", error_message.c_str());
+        std::printf("%s", error_message.c_str()); fflush(stdout);
         throw std::runtime_error(error_message);
     }
 
