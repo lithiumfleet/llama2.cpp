@@ -41,13 +41,12 @@ void Tokenizer::load_from_path(std::string tokenizer_file_path, Config config) {
         fp.read(reinterpret_cast<char*>(&cur_len), sizeof(int));
 
         fp.read(cur_vocab, cur_len);
-        cur_vocab[cur_len] = '\0';
-        cur_len ++;
-        this->vocab.push_back(std::string(cur_vocab, cur_len));
+        std::string key = std::string(cur_vocab, cur_len);
+        this->vocab.push_back(key);
 
         // for debug: show few vocabs.
         if (i == 0) printf("[info] show some to the vocab_table exsamples\n");
-        if (i > 10 && i % (this->vocab_size/2) < 10) {
+        if (i % (this->vocab_size/2) < 20) {
             printf("vocab:%s\tvocab_score:%f\tvocab_len:%d\n", cur_vocab, cur_vocab_score, cur_len);
         }
 
@@ -58,10 +57,9 @@ void Tokenizer::load_from_path(std::string tokenizer_file_path, Config config) {
     fflush(stdout);
 }
 
-std::string Tokenizer::decode_token(int prev_token, int token) {
+std::string Tokenizer::decode_token(int token) {
     std::string piece = this->vocab[token];
     // following BOS (1) token, sentencepiece decoder strips any leading whitespace (see PR #89)
-    if (prev_token == 1 && piece[0] == ' ') { piece = piece.substr(1);}
     // careful, some tokens designate raw bytes, and look like e.g. '<0x01>'
     // parse this and convert and return the actual byte
     // Explaination by GPT: https://chat.openai.com/share/c37b2ded-bd9e-4d3f-b275-f8bf3bd66325
@@ -73,19 +71,104 @@ std::string Tokenizer::decode_token(int prev_token, int token) {
 }
 
 std::string Tokenizer::decode(std::vector<int> tokens) {
-    if (tokens.size() == 0) return "";
-    if (tokens.size() == 1) return this->decode_token(1, tokens[0]);
-    std::string res = "";
-    for (size_t i = 1; i < tokens.size(); i ++) {
-        res += this->decode_token(tokens[i-1], tokens[i]);
+    std::string res;
+    for (size_t i = 0; i < tokens.size(); i ++) {
+        res += this->decode_token(tokens[i]);
     }
     return res;
 }
 
-int Tokenizer::encode_char(std::string word) {
+void Tokenizer::init_vocab_to_index() {
+    for (int i=0; i < this->vocab_size; i ++) {
+        this->vocab_to_index.insert({this->vocab[i], i});
+    }
+};
 
+int Tokenizer::lookup_word(std::string word) {
+    // lazy init
+    if (this->vocab_to_index.empty()) {
+        this->init_vocab_to_index();
+    }
+
+    auto resp = this->vocab_to_index.find(word);
+    if (resp == this->vocab_to_index.end()) {
+        return -1;
+    }
+    return resp->second;
 }
 
-std::vector<int> Tokenizer::encode(std::string text) {
-    ;
+std::string convert_to_hex_string(char ch) {
+    // NOTE: powered by Gemini...
+    // Convert the character to its ASCII value
+    int ascii_value = static_cast<int>(ch);
+
+    // Create the output stream with string formatting
+    std::stringstream ss;
+    ss << std::fixed << std::setfill('0') << std::setw(2) << std::uppercase << std::hex << ascii_value;
+
+    // Extract the formatted string from the stream
+    std::string hex_string = ss.str();
+
+    // Add the leading 0x
+    hex_string = "<0x" + hex_string + ">";
+
+    return hex_string;
+}
+
+
+std::vector<int> Tokenizer::encode(std::string input) {
+    // trans string to vector string
+    std::vector<std::string> text;
+    std::string string_value;
+    for (auto c : input) {
+        if (c == 0x00) continue;
+        if (c <= 0xFF) {
+            string_value = convert_to_hex_string(c);
+        } else{
+            string_value = std::string(1, c);
+        }
+        text.push_back(string_value);
+    }
+
+    while (true) {
+        float best_score = -1e10;
+        int mergedstr_left_index = -1;
+
+        // BPE: pair wise merge
+        for (size_t i=1; i < text.size(); i ++) {
+            std::string cur_merge = text[i-1] + text[i];
+            int merge_id = this->lookup_word(cur_merge);
+            if (merge_id != -1 && this->vocab_scores[merge_id] > best_score) {
+                best_score = this->vocab_scores[merge_id];
+                mergedstr_left_index = i-1;
+            }
+        }
+
+        // BPE ending condition
+        if (mergedstr_left_index == -1) { break; }
+
+        // text vector
+        text[mergedstr_left_index] = text[mergedstr_left_index] + text[mergedstr_left_index+1];
+        text.erase(text.begin()+mergedstr_left_index+1);
+    }
+
+    // for debug usage
+    // for (auto piece : text) {
+    //     printf("%s| ", piece.c_str());
+    // }
+    // printf("\n"); fflush(stdout);
+
+    // lookup index
+    std::vector<int> res;
+    int index;
+    for (size_t i=0; i < text.size(); i ++) {
+        index = this->lookup_word(text[i]);
+        if (index == -1) {
+            std::string error_msg = "[error] can not decode " + text[i] + "\n";
+            throw std::runtime_error(error_msg);
+        }
+        res.push_back(index);
+    }
+
+    return res;
 }
