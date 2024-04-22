@@ -3,7 +3,7 @@
 
 void split_matrix_2d(vector<vector<float>>& dest, vector<float>::iterator& beg, int width, int length) {
     for (int i = 0; i < width; i ++) {
-        dest.push_back(vector<float>(beg+length*i, beg+length*i+length+1));
+        dest.push_back(vector<float>(beg+length*i, beg+length*i+length));
     }
     beg += width * length;
 }
@@ -27,7 +27,6 @@ void Transformer::map_weights() {
     int vocab_size  = this->config.vocab_size; // vocabulary size, usually 256 (byte-level)
     int seq_len     = this->config.seq_len; // max sequence length
 
-    int offset = 0;
     auto beg = this->data.begin();
 
     // token_embedding_table
@@ -58,6 +57,27 @@ void Transformer::map_weights() {
     this->weights.wcls = this->weights.token_embedding_table;
 }
 
+void Transformer::init_runtime_status() {
+
+    int dim         = this->config.dim; // transformer dimension
+    int hidden_dim  = this->config.hidden_dim; // for ffn layers
+    int n_layers    = this->config.n_layers; // number of layers
+    int n_heads     = this->config.n_heads; // number of query heads
+    int vocab_size  = this->config.vocab_size; // vocabulary size, usually 256 (byte-level)
+    int seq_len     = this->config.seq_len; // max sequence length
+
+    this->state.x           = vector<float>(dim, 0);
+    this->state.xb          = vector<float>(dim, 0);
+    this->state.xb2         = vector<float>(dim, 0);
+    this->state.hb          = vector<float>(hidden_dim, 0);
+    this->state.hb2         = vector<float>(hidden_dim, 0);
+    this->state.q           = vector<float>(dim, 0);
+    this->state.key_cache   = vector<vector<vector<float>>>(n_layers, vector<vector<float>>(seq_len, vector<float>(dim, 0)));
+    this->state.value_cache = vector<vector<vector<float>>>(n_layers, vector<vector<float>>(seq_len, vector<float>(dim, 0)));
+    this->state.att         = vector<vector<float>>(n_heads, vector<float>(seq_len,0));
+    this->state.logits      = vector<float>(vocab_size, 0);
+}
+
 void Transformer::load_from_path(string model_path, Config config) {
     printf("[info] loading model.\n");
     this->config = config;
@@ -74,7 +94,7 @@ void Transformer::load_from_path(string model_path, Config config) {
     // skip config
     size_t config_size = sizeof(Config);
     fp.seekg(config_size/sizeof(char));
-    this->file_size = (unsigned long long)(_file_size - config_size);
+    this->file_size = (unsigned long long)_file_size - (unsigned long long)config_size;
     
     // read from file
     vector<char> char_buffer(this->file_size);
@@ -91,6 +111,10 @@ void Transformer::load_from_path(string model_path, Config config) {
 
     // clear this.data
     this->data.clear();
+
+    // init runtiome status
+    printf("init runtime status.\n");
+    init_runtime_status();
 
     printf("[info] finish loading model.\n");
 }
@@ -133,5 +157,124 @@ vector<float> Transformer::forward(int token, int pos) {
     int hidden_dim =  p->hidden_dim;
     int head_size = dim / p->n_heads;
 
+    s->x = this->weights.token_embedding_table[token];
 
+    // pass through decode layers
+    for (int l = 0; l < p->n_layers; l ++) {
+        // rmsnorm
+        rmsnorm(s->xb, s->x, w->rms_att_weight[l]);
+        // get kvcache
+        s->k = s->key_cache[l][pos];
+        s->v = s->value_cache[l][pos];
+
+        // qkv matmuls for this position
+        matmul(s->q, s->xb, w->wq[l]);
+        matmul(s->k, s->xb, w->wk[l]);
+        matmul(s->v, s->xb, w->wv[l]);
+
+        // RoPE relative positional encoding: complex-valued rotate q and k in each head
+        for (int i = 0; i < dim; i+=2) {
+            int head_dim = i % head_size;
+            float freq = 1.0f / powf(10000.0f, head_dim / (float)head_size);
+            float val = pos * freq;
+            float fcr = cosf(val);
+            float fci = sinf(val);
+            int rotn = i < kv_dim ? 2 : 1; // how many vectors? 2 = q & k, 1 = q only
+            // v == 0, vec = s->q
+            float v0 = s->q[i];
+            float v1 = s->q[i+1];
+            s->q[i]   = v0 * fcr - v1 * fci;
+            s->q[i+1] = v0 * fci + v1 * fcr;
+            // v != 0, vec = s->k
+            for (int v = 1; v < rotn; v++) {
+                // the vector to rotate (query or key)
+                float v0 = s->k[i];
+                float v1 = s->k[i+1];
+                s->k[i]   = v0 * fcr - v1 * fci;
+                s->k[i+1] = v0 * fci + v1 * fcr;
+            }
+        }
+
+        // multihead attention. iterate over all heads
+        for (int h = 0; h < p->n_heads; h++) {
+            // in this structure, one seq/att/q/k/v may looks like this:
+            // |<---------------------dim--------------------->|
+            // |<--head_size-->|<--head_size-->|<--head_size-->|
+            // so we have h_hs represents the offset in a seq.
+            int seq_offset_beg = h*head_size; 
+            int seq_offset_end = (h+1)*head_size+1; 
+            
+            // iterate over all timesteps, including the current one
+            for (int t = 0; t <= pos; t++) {
+                // the key for this time step: s->keycache[l][t][h*head_size:(h+1)*head_size+1] 
+                // calculate the attention score as the dot product of q and k
+                float score = 0.0f;
+                for (int i = 0; i < head_size; i++) {
+                    score += s->q[seq_offset_beg+i] * s->key_cache[l][t][seq_offset_beg+i];
+                }
+                score /= sqrtf(head_size);
+                // save the score to the attention buffer
+                s->att[h][seq_offset_beg+t] = score;
+            }
+
+            // softmax the scores to get attention weights, from 0..pos inclusively
+            softmax(s->att[h]);
+
+            // weighted sum of the values, store back into xb
+            fill(s->xb.begin()+seq_offset_beg, s->xb.begin()+seq_offset_end, 0);
+
+            for (int t = 0; t <= pos; t++) {
+                // value vector for this head at this time step is: s->value_cache[l][t][h*head_size:(h+1)*head_size+1]
+                // get the attention weight for this timestep
+                float a = s->att[h][seq_offset_beg+t];
+                // accumulate the weighted value into xb
+                for (int i = 0; i < head_size; i++) {
+                    s->xb[seq_offset_beg+i] += a * s->value_cache[l][t][seq_offset_beg+i];
+                }
+            }
+        }
+
+        // final matmul to get the output of the attention
+        matmul(s->xb2, s->xb, w->wo[l]);
+
+        // residual connection back into x
+        for (int i = 0; i < dim; i++) {
+            s->x[i] += s->xb2[i];
+        }
+
+        // ffn rmsnorm
+        rmsnorm(s->xb, s->x, w->rms_ffn_weight[l]);
+
+        // Now for FFN in PyTorch we have: self.w2(F.silu(self.w1(x)) * self.w3(x))
+        // first calculate self.w1(x) and self.w3(x)
+        matmul(s->hb, s->xb, w->w1[l]);
+        matmul(s->hb2, s->xb, w->w3[l]);
+
+        // SwiGLU non-linearity
+        for (int i = 0; i < hidden_dim; i++) {
+            float val = s->hb[i];
+            // silu(x)=x*σ(x), where σ(x) is the logistic sigmoid
+            val *= (1.0f / (1.0f + expf(-val)));
+            // elementwise multiply with w3(x)
+            val *= s->hb2[i];
+            s->hb[i] = val;
+        }
+
+        // final matmul to get the output of the ffn
+        matmul(s->xb, s->hb, w->w2[l]);
+
+        // residual connection
+        for (int i = 0; i < dim; i++) {
+            s->x[i] += s->xb[i];
+        }
+
+    }
+    // end of layers
+
+    // last rmsnorm
+    rmsnorm(s->x, s->x, w->rms_final_weight);
+
+    // classifier into logits
+    matmul(s->logits, s->x, w->wcls);
+    return s->logits;
 }

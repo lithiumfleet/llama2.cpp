@@ -62,6 +62,7 @@ public:
     /* methods */
     void load_from_path(string model_path, Config config);
     void map_weights();
+    void init_runtime_status();
     vector<float> forward(int token, int pos); // input token and position, return logits vector
 };
 

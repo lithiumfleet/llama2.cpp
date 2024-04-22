@@ -9,6 +9,11 @@ int main() {
     config.load_from_path("./stories110M.bin");
     Transformer model;
     model.load_from_path("./stories110M.bin", config);
+    auto logits = model.forward(1, 0);
+    for (auto item : logits) {
+        cout << item << ", ";
+    }
+    cout << endl;
     
     return 0;
 }
