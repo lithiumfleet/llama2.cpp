@@ -9,11 +9,11 @@ void split_matrix_2d(vector<vector<float>>& dest, vector<float>::iterator& beg, 
 }
 
 void split_matrix_3d(vector<vector<vector<float>>>& dest, vector<float>::iterator& beg, int width, int length, int height) {
-    vector<vector<float>> temp;
     for (int i = 0; i < width; i ++) {
+        vector<vector<float>> temp;
         split_matrix_2d(temp, beg, length, height);
+        dest.push_back(temp);
     }
-    dest.push_back(temp);
 }
 
 void Transformer::map_weights() {
@@ -31,26 +31,37 @@ void Transformer::map_weights() {
 
     // token_embedding_table
     split_matrix_2d(this->weights.token_embedding_table, beg, vocab_size, dim);
+    assert(this->weights.token_embedding_table.size() == vocab_size && this->weights.token_embedding_table[0].size() == dim);
     // rms_att_weight
     split_matrix_2d(this->weights.rms_att_weight, beg, n_layers, dim);
+    assert(this->weights.rms_att_weight.size() == n_layers && this->weights.rms_att_weight[0].size() == dim);
     // wq
     split_matrix_3d(this->weights.wq, beg, n_layers, dim, n_heads * head_size);
+    assert(this->weights.wq.size() == n_layers && this->weights.wq[0].size() == dim && this->weights.wq[0][0].size() == n_heads*head_size);
     // wk
     split_matrix_3d(this->weights.wk, beg, n_layers, dim, n_kv_heads * head_size);
+    assert(this->weights.wk.size() == n_layers && this->weights.wk[0].size() == dim && this->weights.wk[0][0].size() == n_kv_heads*head_size);
     // wv
     split_matrix_3d(this->weights.wv, beg, n_layers, dim, n_kv_heads * head_size);
+    assert(this->weights.wv.size() == n_layers && this->weights.wv[0].size() == dim && this->weights.wv[0][0].size() == n_kv_heads*head_size);
     // wo
     split_matrix_3d(this->weights.wo, beg, n_layers, n_heads * head_size, dim);
+    assert(this->weights.wo.size() == n_layers && this->weights.wo[0].size() == n_heads*head_size && this->weights.wo[0][0].size() == dim);
     // rms_ffn_weight
     split_matrix_2d(this->weights.rms_ffn_weight ,beg, n_layers, dim);
+    assert(this->weights.rms_ffn_weight.size() == n_layers && this->weights.rms_ffn_weight[0].size() == dim);
     // w1
     split_matrix_3d(this->weights.w1, beg, n_layers, hidden_dim, dim);
+    assert(this->weights.w1.size() == n_layers && this->weights.w1[0].size() == hidden_dim && this->weights.w1[0][0].size() == dim);
     // w2
     split_matrix_3d(this->weights.w2, beg, n_layers, hidden_dim, dim);
+    assert(this->weights.w2.size() == n_layers && this->weights.w2[0].size() == hidden_dim && this->weights.w2[0][0].size() == dim);
     // w3
     split_matrix_3d(this->weights.w3, beg, n_layers, hidden_dim, dim);
+    assert(this->weights.w3.size() == n_layers && this->weights.w3[0].size() == hidden_dim && this->weights.w3[0][0].size() == dim);
     // rms_final_weight
-    this->weights.rms_final_weight = vector<float>(beg, beg+dim+1);
+    this->weights.rms_final_weight = vector<float>(beg, beg+dim);
+    assert(this->weights.rms_final_weight.size() == dim);
     // skipped weights
     beg += dim + seq_len * head_size / 2 + seq_len * head_size / 2;
     // wcls
