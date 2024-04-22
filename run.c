@@ -141,6 +141,15 @@ void memory_map_weights(TransformerWeights *w, Config* p, float* ptr, int shared
 
 void read_checkpoint(char* checkpoint, Config* config, TransformerWeights* weights,
                      int* fd, float** data, ssize_t* file_size) {
+    /*
+    1. open file
+    2. read config
+    3. shared_weights = 1/0
+    4. get file size
+    5. mmap
+    6. skip config
+    7. memory_map_weights
+    */
     FILE *file = fopen(checkpoint, "rb");
     if (!file) { fprintf(stderr, "Couldn't open file %s\n", checkpoint); exit(EXIT_FAILURE); }
     // read in the config header

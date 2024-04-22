@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <iomanip>
 #include <sstream>
-#include "config.h"
+#include "Config.h"
 
 class Tokenizer {
 public:

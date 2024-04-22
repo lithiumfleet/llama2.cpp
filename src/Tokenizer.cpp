@@ -46,7 +46,7 @@ void Tokenizer::load_from_path(std::string tokenizer_file_path, Config config) {
 
         // for debug: show few vocabs.
         if (i == 0) printf("[info] show some to the vocab_table exsamples\n");
-        if (i % (this->vocab_size/2) < 20) {
+        if (i > 2 && i % (this->vocab_size/8) < 2) {
             printf("vocab:%s\tvocab_score:%f\tvocab_len:%d\n", cur_vocab, cur_vocab_score, cur_len);
         }
 
@@ -121,7 +121,7 @@ std::vector<int> Tokenizer::encode(std::string input) {
     std::vector<std::string> text;
     std::string string_value;
     for (auto c : input) {
-        if (c == 0x00) continue;
+        if (c == 0x00) continue; // patch for decode many '\000'
         if (c <= 0xFF) {
             string_value = convert_to_hex_string(c);
         } else{

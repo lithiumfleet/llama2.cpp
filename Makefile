@@ -78,4 +78,4 @@ clean:
 
 .PHONY: fromcpp
 fromcpp:
-	$(PP) -g -o run run.cpp src/Config.cpp src/Tokenizer.cpp -lm -Isrc -Wall
+	$(PP) -g -o run run.cpp src/Config.cpp src/Tokenizer.cpp src/Transformer.cpp -lm -Isrc -Wall
