@@ -46,7 +46,7 @@ void Tokenizer::load_from_path(std::string tokenizer_file_path, Config config) {
 
         // for debug: show few vocabs.
         if (i == 0) printf("[info] show some to the vocab_table exsamples\n");
-        if (i > 2 && i % (this->vocab_size/8) < 2) {
+        if (i > 2 && i % (this->vocab_size/3) < 2) {
             printf("vocab:%s\tvocab_score:%f\tvocab_len:%d\n", cur_vocab, cur_vocab_score, cur_len);
         }
 

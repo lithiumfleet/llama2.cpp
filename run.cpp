@@ -1,19 +1,14 @@
-#include "Config.h"
-#include "Tokenizer.h"
-#include "Transformer.h"
+#include "Tinystory.h"
 #include <iostream>
 
 using namespace std;
 int main() {
-    Config config;
-    config.load_from_path("./stories110M.bin");
-    Transformer model;
-    model.load_from_path("./stories110M.bin", config);
-    auto logits = model.forward(1, 0);
-    for (size_t i = 0; i < 10; i ++) {
-        cout << logits[i] << ", ";
-    }
-    cout << endl;
+    
+    Tinystory tinystory;
+    tinystory.load_from_path("tokenizer.bin", "stories110M.bin", "");
+    string prompt = "Once upon a time";
+    cout << "[info] start generate. current prompt: " << prompt << endl;
+    tinystory.generate(prompt, 200);
     
     return 0;
 }

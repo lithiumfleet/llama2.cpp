@@ -159,7 +159,7 @@ void Transformer::load_from_path(string model_path, Config config) {
     printf("init runtime status.\n");
     init_runtime_status();
 
-    printf("[info] finish loading model.\n");
+    printf("[info] finish loading model.\n\n");
 }
 
 vector<float> Transformer::forward(int token, int pos) {
@@ -323,4 +323,3 @@ vector<float> Transformer::forward(int token, int pos) {
     matmul(s->logits, s->x, w->wcls);
     return s->logits;
 }
-
