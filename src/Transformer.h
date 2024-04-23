@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <iostream>
 #include "Config.h"
 #include "Operations.h"
 

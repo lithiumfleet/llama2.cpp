@@ -10,8 +10,8 @@ int main() {
     Transformer model;
     model.load_from_path("./stories110M.bin", config);
     auto logits = model.forward(1, 0);
-    for (auto item : logits) {
-        cout << item << ", ";
+    for (size_t i = 0; i < 10; i ++) {
+        cout << logits[i] << ", ";
     }
     cout << endl;
     

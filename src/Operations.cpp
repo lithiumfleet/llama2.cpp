@@ -15,22 +15,23 @@ void rmsnorm(vector<float>& o, vector<float>& x, vector<float>& weight) {
     }
 }
 
-void softmax(vector<float>& x) {
+void softmax(vector<float>& x, size_t size) {
+    // use size. may be not all of x need to be softmax.
     // find max value (for numerical stability)
     float max_val = x[0];
-    for (size_t i = 1; i < x.size(); i++) {
+    for (size_t i = 1; i < size; i++) {
         if (x[i] > max_val) {
             max_val = x[i];
         }
     }
     // exp and sum
     float sum = 0.0f;
-    for (size_t i = 0; i < x.size(); i++) {
+    for (size_t i = 0; i < size; i++) {
         x[i] = expf(x[i] - max_val);
         sum += x[i];
     }
     // normalize
-    for (size_t i = 0; i < x.size(); i++) {
+    for (size_t i = 0; i < size; i++) {
         x[i] /= sum;
     }
 }

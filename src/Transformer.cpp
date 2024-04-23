@@ -1,5 +1,40 @@
 #include "Transformer.h"
 
+// for debug usage
+string head_vec(string name, vector<float>& vec) {
+    string res = name + ": ";
+    for (size_t i = 0; i < 5; i ++) {
+        res += to_string(vec[i]) + ", ";
+    }
+    return res;
+}
+
+string head_vec(string name, vector<vector<float>>& vec) {
+    string res = name + ": ";
+    for (size_t i = 0; i < 3; i ++) {
+        for (size_t j = 0; j < 3; j ++) {
+            res += to_string(vec[i][j]) + ", ";
+        }
+        res += "| ";
+    }
+    return res;
+}
+
+void print_state(RunState s, int l) {
+    cout << "Current layer: " << l << endl;
+    cout << head_vec("q          ", s.q             ) << endl;
+    cout << head_vec("k          ", s.k             ) << endl;
+    cout << head_vec("v          ", s.v             ) << endl;
+    cout << head_vec("key_cache  ", s.key_cache[l]  ) << endl;
+    cout << head_vec("value_cache", s.value_cache[l]) << endl;
+    cout << head_vec("att        ", s.att           ) << endl;
+    cout << head_vec("x          ", s.x             ) << endl;
+    cout << head_vec("xb         ", s.xb            ) << endl;
+    cout << head_vec("xb2        ", s.xb2           ) << endl;
+    cout << head_vec("hb         ", s.hb            ) << endl;
+    cout << head_vec("hb2        ", s.hb2           ) << endl;
+    cout << endl;
+}
 
 void split_matrix_2d(vector<vector<float>>& dest, vector<float>::iterator& beg, int width, int length) {
     for (int i = 0; i < width; i ++) {
@@ -31,37 +66,37 @@ void Transformer::map_weights() {
 
     // token_embedding_table
     split_matrix_2d(this->weights.token_embedding_table, beg, vocab_size, dim);
-    assert(this->weights.token_embedding_table.size() == vocab_size && this->weights.token_embedding_table[0].size() == dim);
+    //assert(this->weights.token_embedding_table.size() == vocab_size && this->weights.token_embedding_table[0].size() == dim);
     // rms_att_weight
     split_matrix_2d(this->weights.rms_att_weight, beg, n_layers, dim);
-    assert(this->weights.rms_att_weight.size() == n_layers && this->weights.rms_att_weight[0].size() == dim);
+    //assert(this->weights.rms_att_weight.size() == n_layers && this->weights.rms_att_weight[0].size() == dim);
     // wq
     split_matrix_3d(this->weights.wq, beg, n_layers, dim, n_heads * head_size);
-    assert(this->weights.wq.size() == n_layers && this->weights.wq[0].size() == dim && this->weights.wq[0][0].size() == n_heads*head_size);
+    //assert(this->weights.wq.size() == n_layers && this->weights.wq[0].size() == dim && this->weights.wq[0][0].size() == n_heads*head_size);
     // wk
     split_matrix_3d(this->weights.wk, beg, n_layers, dim, n_kv_heads * head_size);
-    assert(this->weights.wk.size() == n_layers && this->weights.wk[0].size() == dim && this->weights.wk[0][0].size() == n_kv_heads*head_size);
+    //assert(this->weights.wk.size() == n_layers && this->weights.wk[0].size() == dim && this->weights.wk[0][0].size() == n_kv_heads*head_size);
     // wv
     split_matrix_3d(this->weights.wv, beg, n_layers, dim, n_kv_heads * head_size);
-    assert(this->weights.wv.size() == n_layers && this->weights.wv[0].size() == dim && this->weights.wv[0][0].size() == n_kv_heads*head_size);
+    //assert(this->weights.wv.size() == n_layers && this->weights.wv[0].size() == dim && this->weights.wv[0][0].size() == n_kv_heads*head_size);
     // wo
     split_matrix_3d(this->weights.wo, beg, n_layers, n_heads * head_size, dim);
-    assert(this->weights.wo.size() == n_layers && this->weights.wo[0].size() == n_heads*head_size && this->weights.wo[0][0].size() == dim);
+    //assert(this->weights.wo.size() == n_layers && this->weights.wo[0].size() == n_heads*head_size && this->weights.wo[0][0].size() == dim);
     // rms_ffn_weight
     split_matrix_2d(this->weights.rms_ffn_weight ,beg, n_layers, dim);
-    assert(this->weights.rms_ffn_weight.size() == n_layers && this->weights.rms_ffn_weight[0].size() == dim);
+    //assert(this->weights.rms_ffn_weight.size() == n_layers && this->weights.rms_ffn_weight[0].size() == dim);
     // w1
     split_matrix_3d(this->weights.w1, beg, n_layers, hidden_dim, dim);
-    assert(this->weights.w1.size() == n_layers && this->weights.w1[0].size() == hidden_dim && this->weights.w1[0][0].size() == dim);
+    //assert(this->weights.w1.size() == n_layers && this->weights.w1[0].size() == hidden_dim && this->weights.w1[0][0].size() == dim);
     // w2
-    split_matrix_3d(this->weights.w2, beg, n_layers, hidden_dim, dim);
-    assert(this->weights.w2.size() == n_layers && this->weights.w2[0].size() == hidden_dim && this->weights.w2[0][0].size() == dim);
+    split_matrix_3d(this->weights.w2, beg, n_layers, dim, hidden_dim);
+    //assert(this->weights.w2.size() == n_layers && this->weights.w2[0].size() == dim && this->weights.w2[0][0].size() == hidden_dim);
     // w3
     split_matrix_3d(this->weights.w3, beg, n_layers, hidden_dim, dim);
-    assert(this->weights.w3.size() == n_layers && this->weights.w3[0].size() == hidden_dim && this->weights.w3[0][0].size() == dim);
+    //assert(this->weights.w3.size() == n_layers && this->weights.w3[0].size() == hidden_dim && this->weights.w3[0][0].size() == dim);
     // rms_final_weight
     this->weights.rms_final_weight = vector<float>(beg, beg+dim);
-    assert(this->weights.rms_final_weight.size() == dim);
+    //assert(this->weights.rms_final_weight.size() == dim);
     // skipped weights
     beg += dim + seq_len * head_size / 2 + seq_len * head_size / 2;
     // wcls
@@ -106,15 +141,12 @@ void Transformer::load_from_path(string model_path, Config config) {
     size_t config_size = sizeof(Config);
     fp.seekg(config_size/sizeof(char));
     this->file_size = (unsigned long long)_file_size - (unsigned long long)config_size;
+    size_t num_floats = this->file_size / sizeof(float);
     
     // read from file
-    vector<char> char_buffer(this->file_size);
-    fp.read(char_buffer.data(), this->file_size);
+    this->data = vector<float>(num_floats);
 
-    const float* float_buffer = reinterpret_cast<const float*>(char_buffer.data());
-    size_t num_floats = this->file_size / sizeof(float);
-
-    this->data = vector<float>(float_buffer, float_buffer+num_floats);
+    fp.read(reinterpret_cast<char*>(this->data.data()), this->file_size);
 
     // load weights
     printf("loading weights.\n");
@@ -175,8 +207,8 @@ vector<float> Transformer::forward(int token, int pos) {
         // rmsnorm
         rmsnorm(s->xb, s->x, w->rms_att_weight[l]);
         // get kvcache
-        s->k = s->key_cache[l][pos];
-        s->v = s->value_cache[l][pos];
+        s->k = vector<float>(dim, 0);
+        s->v = vector<float>(dim, 0);
 
         // qkv matmuls for this position
         matmul(s->q, s->xb, w->wq[l]);
@@ -206,14 +238,17 @@ vector<float> Transformer::forward(int token, int pos) {
             }
         }
 
+        // update kvcache
+        s->key_cache[l][pos] = s->k;
+        s->value_cache[l][pos] = s->v;
+
         // multihead attention. iterate over all heads
         for (int h = 0; h < p->n_heads; h++) {
             // in this structure, one seq/att/q/k/v may looks like this:
             // |<---------------------dim--------------------->|
             // |<--head_size-->|<--head_size-->|<--head_size-->|
-            // so we have h_hs represents the offset in a seq.
+            // so we have seq beg and end represents the offset in a seq.
             int seq_offset_beg = h*head_size; 
-            int seq_offset_end = (h+1)*head_size+1; 
             
             // iterate over all timesteps, including the current one
             for (int t = 0; t <= pos; t++) {
@@ -225,19 +260,19 @@ vector<float> Transformer::forward(int token, int pos) {
                 }
                 score /= sqrtf(head_size);
                 // save the score to the attention buffer
-                s->att[h][seq_offset_beg+t] = score;
+                s->att[h][t] = score;
             }
 
             // softmax the scores to get attention weights, from 0..pos inclusively
-            softmax(s->att[h]);
+            softmax(s->att[h], pos+1);
 
             // weighted sum of the values, store back into xb
-            fill(s->xb.begin()+seq_offset_beg, s->xb.begin()+seq_offset_end, 0);
+            fill(s->xb.begin()+seq_offset_beg, s->xb.begin()+seq_offset_beg+head_size, 0);
 
             for (int t = 0; t <= pos; t++) {
                 // value vector for this head at this time step is: s->value_cache[l][t][h*head_size:(h+1)*head_size+1]
                 // get the attention weight for this timestep
-                float a = s->att[h][seq_offset_beg+t];
+                float a = s->att[h][t];
                 // accumulate the weighted value into xb
                 for (int i = 0; i < head_size; i++) {
                     s->xb[seq_offset_beg+i] += a * s->value_cache[l][t][seq_offset_beg+i];
@@ -278,7 +313,6 @@ vector<float> Transformer::forward(int token, int pos) {
         for (int i = 0; i < dim; i++) {
             s->x[i] += s->xb[i];
         }
-
     }
     // end of layers
 
@@ -289,3 +323,4 @@ vector<float> Transformer::forward(int token, int pos) {
     matmul(s->logits, s->x, w->wcls);
     return s->logits;
 }
+
